@@ -107,93 +107,255 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LOC Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous"></script>
   <style>
     :root {
-      --bg:#0f0f13; --card:#1a1a26; --header:#12121c;
-      --border:#2a2a3d; --t1:#e2e8f0; --t2:#64748b; --t3:#3f4a5e;
-      --purple:#a78bfa; --green:#34d399; --blue:#60a5fa; --orange:#fb923c;
-      --red:#f87171; --gap:16px; --r:10px;
+      /* paper / surfaces */
+      --paper-0: #EEEEEE;
+      --paper-1: #E4E4E3;
+      --paper-2: #D8D8D6;
+      --paper-3: #C2C2C0;
+      /* ink */
+      --ink-0:   #0C0C0C;
+      --ink-1:   #1C1C1B;
+      --ink-2:   #303030;
+      --ink-3:   #5A5A58;
+      --ink-4:   #8A8A88;
+      --ink-5:   #B4B4B2;
+      /* accents */
+      --lime:    #D4E635;
+      --cobalt:  #1F47E6;
+      --pink:    #FF4FA8;
+      --kelly:   #3DB94A;
+      /* layout */
+      --gap: 16px;
+      --ff-mono: 'JetBrains Mono', ui-monospace, 'Courier New', monospace;
+      --ff-display: 'Space Grotesk', 'Helvetica Neue', Arial, sans-serif;
     }
     * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:var(--bg); color:var(--t1); padding:24px; }
-    .wrap { max-width:1400px; margin:0 auto; }
+    body {
+      font-family: var(--ff-mono);
+      background: var(--paper-0);
+      color: var(--ink-0);
+      padding: 24px;
+      -webkit-font-smoothing: antialiased;
+    }
+    /* subtle paper noise overlay */
+    body::before {
+      content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 100;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence baseFrequency='0.85'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.04 0'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>");
+      mix-blend-mode: multiply;
+    }
+    ::selection { background: var(--lime); color: var(--ink-0); }
+    .wrap { max-width: 1400px; margin: 0 auto; }
 
-    /* header */
-    header { background:var(--header); border:1px solid var(--border); border-radius:var(--r); padding:16px 24px; margin-bottom:var(--gap); }
-    .header-top { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
-    header h1 { font-size:16px; font-weight:600; }
-    header .sub { font-size:11px; color:var(--t2); margin-top:2px; }
-    .header-right { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-    #last-updated { font-size:11px; color:var(--t2); }
+    /* ── MOTION ── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes caret-blink { 50% { opacity: 0; } }
+    @keyframes pulse-dot { 0%,50%{opacity:1} 51%,100%{opacity:0.2} }
 
-    /* range selector */
-    .range-bar { display:flex; gap:4px; }
-    .range-btn { background:transparent; color:var(--t2); border:1px solid var(--border); border-radius:5px; padding:5px 11px; font-size:12px; cursor:pointer; transition:all .15s; }
-    .range-btn:hover { color:var(--t1); border-color:#3f4a5e; }
-    .range-btn.active { background:rgba(167,139,250,.15); color:var(--purple); border-color:rgba(167,139,250,.4); font-weight:600; }
+    /* ── SCROLLBAR ── */
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: var(--paper-1); border-left: 1px solid var(--ink-0); }
+    ::-webkit-scrollbar-thumb { background: var(--ink-0); }
 
-    /* repo row */
-    .repo-row { display:flex; align-items:center; gap:10px; margin-top:14px; padding-top:14px; border-top:1px solid var(--border); flex-wrap:wrap; }
-    .repo-label { font-size:11px; color:var(--t2); white-space:nowrap; }
-    .repo-path-display { font-size:12px; color:var(--t1); font-family:monospace; background:rgba(255,255,255,.04); border:1px solid var(--border); border-radius:5px; padding:5px 10px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
-    .repo-path-display:hover { border-color:rgba(167,139,250,.4); }
-    #repo-input { font-size:12px; color:var(--t1); font-family:monospace; background:rgba(255,255,255,.06); border:1px solid rgba(167,139,250,.5); border-radius:5px; padding:5px 10px; flex:1; min-width:200px; outline:none; display:none; }
-    #repo-input:focus { border-color:var(--purple); }
-    #repo-input.visible { display:block; }
-    .repo-path-display.hidden { display:none; }
+    /* ── HEADER ── */
+    header {
+      border: 1px solid var(--ink-0);
+      background: var(--paper-1);
+      padding: 16px 20px;
+      margin-bottom: var(--gap);
+    }
+    .header-top {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      gap: 12px; flex-wrap: wrap;
+    }
+    .header-left {}
+    .dash-code {
+      font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase;
+      color: var(--ink-4); margin-bottom: 4px;
+    }
+    #dash-title {
+      font-family: var(--ff-display); font-size: 22px; font-weight: 700;
+      letter-spacing: -0.02em; text-transform: uppercase; line-height: 1;
+    }
+    .header-sub {
+      font-size: 10px; color: var(--ink-3); margin-top: 5px;
+      letter-spacing: 0.05em; text-transform: uppercase;
+    }
+    .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    #last-updated { font-size: 10px; color: var(--ink-4); letter-spacing: 0.05em; text-transform: uppercase; }
 
-    /* buttons */
-    .btn { display:inline-flex; align-items:center; gap:6px; border-radius:6px; padding:6px 13px; font-size:12px; font-weight:500; cursor:pointer; border:1px solid; transition:background .15s,opacity .15s; white-space:nowrap; }
-    .btn:disabled { opacity:.45; cursor:not-allowed; }
-    .btn-purple { background:rgba(167,139,250,.12); color:var(--purple); border-color:rgba(167,139,250,.3); }
-    .btn-purple:hover:not(:disabled) { background:rgba(167,139,250,.22); }
-    .btn-green { background:rgba(52,211,153,.1); color:var(--green); border-color:rgba(52,211,153,.3); }
-    .btn-green:hover:not(:disabled) { background:rgba(52,211,153,.2); }
-    .btn-ghost { background:transparent; color:var(--t2); border-color:var(--border); font-size:11px; padding:5px 10px; }
-    .btn-ghost:hover:not(:disabled) { color:var(--t1); border-color:#3f4a5e; }
-    .btn svg { width:13px; height:13px; flex-shrink:0; }
-    .spinning svg { animation:spin 1s linear infinite; }
-    @keyframes spin { to { transform:rotate(360deg); } }
+    /* ── RANGE BAR ── */
+    .range-bar { display: flex; }
+    .range-btn {
+      font-family: var(--ff-mono); font-size: 11px; font-weight: 500;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      padding: 6px 11px; cursor: pointer;
+      background: transparent; color: var(--ink-3);
+      border: 1px solid var(--ink-0);
+      margin-left: -1px; position: relative;
+      transition: background 80ms linear, color 80ms linear;
+    }
+    .range-btn:first-child { margin-left: 0; }
+    .range-btn:hover { background: var(--paper-2); color: var(--ink-0); }
+    .range-btn.active {
+      background: var(--ink-0); color: var(--paper-0); font-weight: 700; z-index: 1;
+    }
 
-    #repo-error { font-size:11px; color:var(--red); display:none; }
-    #repo-error.visible { display:block; }
+    /* ── REPO ROW ── */
+    .repo-row {
+      display: flex; align-items: center; gap: 10px;
+      margin-top: 14px; padding-top: 14px;
+      border-top: 1px dotted var(--ink-4); flex-wrap: wrap;
+    }
+    .repo-label {
+      font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase;
+      color: var(--ink-4); white-space: nowrap;
+    }
+    .repo-path-display {
+      font-family: var(--ff-mono); font-size: 12px; color: var(--ink-1);
+      background: var(--paper-2); border: 1px solid var(--ink-0);
+      padding: 5px 10px; flex: 1; min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      cursor: pointer; transition: background 80ms linear;
+    }
+    .repo-path-display:hover { background: var(--paper-3); }
+    #repo-input {
+      font-family: var(--ff-mono); font-size: 12px; color: var(--ink-0);
+      background: var(--paper-0); border: 1px solid var(--ink-0);
+      padding: 5px 10px; flex: 1; min-width: 200px; outline: none; display: none;
+    }
+    #repo-input:focus { outline: 2px solid var(--lime); outline-offset: -1px; }
+    #repo-input.visible { display: block; }
+    .repo-path-display.hidden { display: none; }
 
-    /* kpi */
-    .kpi-row { display:grid; grid-template-columns:repeat(4,1fr); gap:var(--gap); margin-bottom:var(--gap); }
-    .kpi { background:var(--card); border:1px solid var(--border); border-radius:var(--r); padding:18px 20px; }
-    .kpi-label { font-size:11px; color:var(--t2); text-transform:uppercase; letter-spacing:.07em; margin-bottom:7px; }
-    .kpi-value { font-size:1.9rem; font-weight:700; line-height:1; margin-bottom:5px; }
-    .kpi-sub { font-size:11px; color:var(--t2); }
-    .c-purple{color:var(--purple);} .c-green{color:var(--green);} .c-blue{color:var(--blue);} .c-orange{color:var(--orange);}
+    /* ── BUTTONS ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: var(--ff-mono); font-size: 11px; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      padding: 7px 14px; cursor: pointer; border: 1px solid var(--ink-0);
+      white-space: nowrap; position: relative;
+      transition: transform 80ms linear, box-shadow 80ms linear, background 80ms linear;
+    }
+    .btn:hover   { transform: translate(1px,1px); }
+    .btn:active  { transform: translate(2px,2px); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+    .btn svg { width: 12px; height: 12px; flex-shrink: 0; }
+    .btn-primary { background: var(--ink-0); color: var(--paper-0); }
+    .btn-primary:hover:not(:disabled) { background: var(--ink-1); }
+    .btn-lime { background: var(--lime); color: var(--ink-0); }
+    .btn-lime:hover:not(:disabled) { background: #C8CF25; }
+    .btn-ghost { background: transparent; color: var(--ink-3); }
+    .btn-ghost:hover:not(:disabled) { background: var(--paper-2); color: var(--ink-0); }
+    .spinning svg { animation: spin 1s linear infinite; }
 
-    /* charts */
-    .chart-row { display:grid; grid-template-columns:2fr 1fr; gap:var(--gap); margin-bottom:var(--gap); }
-    .chart-row-2 { display:grid; grid-template-columns:1fr 1fr; gap:var(--gap); margin-bottom:var(--gap); }
-    .chart-box { background:var(--card); border:1px solid var(--border); border-radius:var(--r); padding:18px 22px; }
-    .chart-box h3 { font-size:13px; font-weight:600; margin-bottom:3px; }
-    .chart-box .csub { font-size:11px; color:var(--t2); margin-bottom:16px; }
-    canvas { max-height:280px; }
+    #repo-error {
+      font-size: 10px; color: #C0392B; letter-spacing: 0.05em;
+      text-transform: uppercase; display: none;
+    }
+    #repo-error.visible { display: block; }
 
-    /* table */
-    .table-box { background:var(--card); border:1px solid var(--border); border-radius:var(--r); padding:18px 22px; margin-bottom:var(--gap); overflow-x:auto; }
-    .table-box h3 { font-size:13px; font-weight:600; margin-bottom:14px; }
-    table { width:100%; border-collapse:collapse; font-size:12px; }
-    th { text-align:left; padding:7px 11px; border-bottom:1px solid var(--border); color:var(--t2); font-size:11px; text-transform:uppercase; letter-spacing:.05em; white-space:nowrap; }
-    td { padding:8px 11px; border-bottom:1px solid rgba(42,42,61,.5); }
-    tr:last-child td { border-bottom:none; }
-    tr:hover td { background:rgba(167,139,250,.04); }
-    .tr { text-align:right; }
-    .pos{color:var(--green);} .neg{color:var(--red);}
-    .bar-cell { display:flex; align-items:center; gap:7px; }
-    .bar-bg { flex:1; height:4px; background:var(--border); border-radius:2px; }
-    .bar-fill { height:100%; border-radius:2px; background:var(--purple); }
+    /* ── KPI ROW ── */
+    .kpi-row {
+      display: grid; grid-template-columns: repeat(4,1fr);
+      gap: var(--gap); margin-bottom: var(--gap);
+    }
+    .kpi {
+      background: var(--paper-1); border: 1px solid var(--ink-0); padding: 18px 20px;
+    }
+    .kpi-label {
+      font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase;
+      color: var(--ink-4); margin-bottom: 10px;
+    }
+    .kpi-value {
+      font-family: var(--ff-display); font-size: 2.4rem; font-weight: 700;
+      line-height: 1; letter-spacing: -0.02em; margin-bottom: 6px;
+    }
+    .kpi-sub { font-size: 10px; color: var(--ink-4); letter-spacing: 0.02em; }
+    .c-lime   { color: var(--cobalt); }   /* LOC — cobalt */
+    .c-growth { color: var(--kelly); }    /* growth — kelly green */
+    .c-files  { color: var(--ink-0); }   /* files — ink */
+    .c-avg    { color: var(--pink); }    /* avg — pink */
 
-    footer { font-size:11px; color:var(--t3); text-align:center; padding-top:6px; }
+    /* ── CHART BOXES ── */
+    .chart-row   { display: grid; grid-template-columns: 2fr 1fr; gap: var(--gap); margin-bottom: var(--gap); }
+    .chart-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); margin-bottom: var(--gap); }
+    .chart-box {
+      background: var(--paper-1); border: 1px solid var(--ink-0); padding: 18px 20px;
+    }
+    .chart-head {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      margin-bottom: 14px;
+    }
+    .chart-box h3 {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--ink-0);
+    }
+    .chart-code { font-size: 9px; color: var(--ink-5); letter-spacing: 0.15em; }
+    .chart-box .csub {
+      font-size: 10px; color: var(--ink-4); margin-top: 2px; letter-spacing: 0.04em;
+    }
+    canvas { max-height: 260px; }
 
+    /* ── TABLE ── */
+    .table-box {
+      background: var(--paper-1); border: 1px solid var(--ink-0);
+      padding: 18px 20px; margin-bottom: var(--gap); overflow-x: auto;
+    }
+    .table-head-row {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 14px;
+    }
+    .table-box h3 {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+    }
+    .table-code { font-size: 9px; color: var(--ink-5); letter-spacing: 0.15em; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th {
+      text-align: left; padding: 7px 10px;
+      border-bottom: 1px solid var(--ink-0);
+      font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--ink-3); font-weight: 500; white-space: nowrap;
+      cursor: pointer; transition: color 80ms linear;
+    }
+    th:hover { color: var(--ink-0); }
+    td {
+      padding: 7px 10px;
+      border-bottom: 1px dotted var(--ink-5);
+      font-variant-numeric: tabular-nums;
+      transition: background 80ms linear, color 80ms linear;
+    }
+    tr:last-child td { border-bottom: none; }
+    tbody tr {
+      box-shadow: inset 0 0 0 0 var(--ink-0);
+      transition: box-shadow 80ms linear, background 80ms linear;
+    }
+    tbody tr:hover { background: var(--paper-2); box-shadow: inset 3px 0 0 0 var(--ink-0); }
+    tbody tr:hover td { color: var(--ink-0); }
+    .tr { text-align: right; }
+    .pos { color: var(--kelly); font-weight: 700; }
+    .neg { color: #C0392B; font-weight: 700; }
+    .bar-cell { display: flex; align-items: center; gap: 8px; }
+    .bar-bg { flex: 1; height: 3px; background: var(--paper-3); }
+    .bar-fill { height: 100%; background: var(--ink-0); }
+    .pct-label { font-size: 9px; color: var(--ink-4); letter-spacing: 0.05em; min-width: 32px; }
+
+    /* ── FOOTER ── */
+    footer {
+      font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase;
+      color: var(--ink-5); text-align: center; padding-top: 8px;
+      border-top: 1px dotted var(--ink-5); margin-top: 8px;
+    }
+
+    /* ── RESPONSIVE ── */
     @media(max-width:900px) {
-      .kpi-row { grid-template-columns:repeat(2,1fr); }
-      .chart-row,.chart-row-2 { grid-template-columns:1fr; }
+      .kpi-row { grid-template-columns: repeat(2,1fr); }
+      .chart-row, .chart-row-2 { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -201,9 +363,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <div class="wrap">
   <header>
     <div class="header-top">
-      <div>
+      <div class="header-left">
+        <div class="dash-code">[LOC.01] &nbsp;·&nbsp; WEEKLY GIT SNAPSHOTS</div>
         <h1 id="dash-title">LOC Dashboard</h1>
-        <div class="sub">Weekly git snapshots &nbsp;·&nbsp; TS, TSX, JS, JSX, CSS, SCSS</div>
+        <div class="header-sub">TS &nbsp;·&nbsp; TSX &nbsp;·&nbsp; JS &nbsp;·&nbsp; JSX &nbsp;·&nbsp; CSS &nbsp;·&nbsp; SCSS</div>
       </div>
       <div class="header-right">
         <div class="range-bar">
@@ -214,77 +377,119 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
           <button class="range-btn" onclick="setRange(0)">All</button>
         </div>
         <span id="last-updated"></span>
-        <button class="btn btn-purple" id="refresh-btn" onclick="triggerRefresh()">
+        <button class="btn btn-lime" id="refresh-btn" onclick="triggerRefresh()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
             <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
           </svg>
-          Refresh Data
+          Refresh
         </button>
       </div>
     </div>
 
     <div class="repo-row">
-      <span class="repo-label">Repo:</span>
+      <span class="repo-label">Repo</span>
       <div class="repo-path-display" id="repo-display" onclick="editRepo()" title="Click to change repo">__REPO_PATH__</div>
-      <input class="btn" id="repo-input" type="text" placeholder="/path/to/your/repo" onkeydown="repoKeydown(event)" />
-      <button class="btn btn-green" id="set-repo-btn" onclick="setRepo()" style="display:none">Set &amp; Refresh</button>
+      <input id="repo-input" type="text" placeholder="/path/to/your/repo" onkeydown="repoKeydown(event)" />
+      <button class="btn btn-primary" id="set-repo-btn" onclick="setRepo()" style="display:none">Set &amp; Refresh</button>
       <button class="btn btn-ghost" id="cancel-repo-btn" onclick="cancelEdit()" style="display:none">Cancel</button>
       <span id="repo-error"></span>
     </div>
   </header>
 
   <section class="kpi-row">
-    <div class="kpi"><div class="kpi-label">Current LOC</div><div class="kpi-value c-purple" id="kpi-loc">—</div><div class="kpi-sub" id="kpi-loc-sub"></div></div>
-    <div class="kpi"><div class="kpi-label">Total Growth</div><div class="kpi-value c-green" id="kpi-growth">—</div><div class="kpi-sub" id="kpi-growth-sub"></div></div>
-    <div class="kpi"><div class="kpi-label">Source Files</div><div class="kpi-value c-blue" id="kpi-files">—</div><div class="kpi-sub" id="kpi-files-sub"></div></div>
-    <div class="kpi"><div class="kpi-label">Avg LOC / Week</div><div class="kpi-value c-orange" id="kpi-avg">—</div><div class="kpi-sub" id="kpi-avg-sub"></div></div>
+    <div class="kpi">
+      <div class="kpi-label">Current LOC</div>
+      <div class="kpi-value c-lime" id="kpi-loc">—</div>
+      <div class="kpi-sub" id="kpi-loc-sub"></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Total Growth</div>
+      <div class="kpi-value c-growth" id="kpi-growth">—</div>
+      <div class="kpi-sub" id="kpi-growth-sub"></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Source Files</div>
+      <div class="kpi-value c-files" id="kpi-files">—</div>
+      <div class="kpi-sub" id="kpi-files-sub"></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Avg LOC / Week</div>
+      <div class="kpi-value c-avg" id="kpi-avg">—</div>
+      <div class="kpi-sub" id="kpi-avg-sub"></div>
+    </div>
   </section>
 
   <section class="chart-row">
     <div class="chart-box">
-      <h3>Lines of Code &amp; File Count Over Time</h3>
-      <div class="csub">LOC on left axis (purple) &nbsp;·&nbsp; file count on right axis (green, dashed)</div>
+      <div class="chart-head">
+        <div>
+          <h3>Lines of Code &amp; File Count</h3>
+          <div class="csub">LOC — left axis &nbsp;·&nbsp; files — right axis (dashed)</div>
+        </div>
+        <span class="chart-code">[CHT.01]</span>
+      </div>
       <canvas id="trendChart"></canvas>
     </div>
     <div class="chart-box">
-      <h3>Growth Phase Breakdown</h3>
-      <div class="csub">LOC added per quarter</div>
+      <div class="chart-head">
+        <div>
+          <h3>Growth by Quarter</h3>
+          <div class="csub">LOC added per quarter</div>
+        </div>
+        <span class="chart-code">[CHT.02]</span>
+      </div>
       <canvas id="donutChart"></canvas>
     </div>
   </section>
 
   <section class="chart-row-2">
     <div class="chart-box">
-      <h3>Weekly LOC Added</h3>
-      <div class="csub">Net lines added per week</div>
+      <div class="chart-head">
+        <div>
+          <h3>Weekly LOC Added</h3>
+          <div class="csub">Net lines added per week</div>
+        </div>
+        <span class="chart-code">[CHT.03]</span>
+      </div>
       <canvas id="deltaChart"></canvas>
     </div>
     <div class="chart-box">
-      <h3>LOC per File</h3>
-      <div class="csub">Average lines per source file over time</div>
+      <div class="chart-head">
+        <div>
+          <h3>LOC per File</h3>
+          <div class="csub">Average lines per source file</div>
+        </div>
+        <span class="chart-code">[CHT.04]</span>
+      </div>
       <canvas id="densityChart"></canvas>
     </div>
   </section>
 
   <section class="table-box">
-    <h3>Weekly Snapshot Data</h3>
+    <div class="table-head-row">
+      <h3>Weekly Snapshot Data</h3>
+      <span class="table-code">[TBL.01]</span>
+    </div>
     <table>
       <thead><tr>
-        <th>Date</th><th class="tr">Lines of Code</th><th class="tr">Files</th>
-        <th class="tr">LOC / File</th><th class="tr">Week Delta</th>
+        <th>Date</th>
+        <th class="tr">Lines of Code</th>
+        <th class="tr">Files</th>
+        <th class="tr">LOC / File</th>
+        <th class="tr">Week Delta</th>
         <th style="min-width:140px">Progress</th>
       </tr></thead>
       <tbody id="tbody"></tbody>
     </table>
   </section>
 
-  <footer>loc-dashboard &nbsp;·&nbsp; served by loc_server.py</footer>
+  <footer>loc-dashboard &nbsp;·&nbsp; loc_server.py &nbsp;·&nbsp; [v2]</footer>
 </div>
 
 <script>
-const PURPLE='#a78bfa', GREEN='#34d399', BLUE='#60a5fa', ORANGE='#fb923c';
-const GRID='rgba(42,42,61,0.8)', TICK='#4a5568';
+const COBALT='#1F47E6', KELLY='#3DB94A', PINK='#FF4FA8', LIME='#D4E635', INK='#0C0C0C';
+const GRID='rgba(194,194,192,0.6)', TICK='#8A8A88';
 
 let charts = {};
 let currentData = __INITIAL_DATA__;
@@ -294,12 +499,10 @@ let activeMonths = 12;
 function fmt(n) { return n >= 1000 ? (n/1000).toFixed(1)+'k' : String(n); }
 function fmtFull(n) { return n.toLocaleString(); }
 
-// dates are ISO "2025-08-29" — display as "Aug 29 '25"
 function fmtDate(iso) {
   const d = new Date(iso + 'T00:00:00');
-  const mon = d.toLocaleString('en', {month:'short'});
   const yr = String(d.getFullYear()).slice(2);
-  return `${mon} ${d.getDate()} '${yr}`;
+  return d.toLocaleString('en', {month:'short'}) + ' ' + String(d.getDate()).padStart(2,'0') + " '" + yr;
 }
 
 function filterByRange(data, months) {
@@ -323,7 +526,6 @@ function setRange(months) {
   renderAll(currentData);
 }
 
-// --- Repo switching ---
 function editRepo() {
   const input = document.getElementById('repo-input');
   const display = document.getElementById('repo-display');
@@ -353,18 +555,17 @@ function repoKeydown(e) {
 function setRepoError(msg) {
   const el = document.getElementById('repo-error');
   el.textContent = msg;
-  el.className = 'repo-error' + (msg ? ' visible' : '');
+  el.className = msg ? 'visible' : '';
+  el.id = 'repo-error';
 }
 
 async function setRepo() {
   const path = document.getElementById('repo-input').value.trim();
   if (!path || path === currentRepo) { cancelEdit(); return; }
-
   const btn = document.getElementById('set-repo-btn');
   btn.disabled = true;
   btn.textContent = 'Checking…';
   setRepoError('');
-
   try {
     const res = await fetch('/api/set-repo', {
       method: 'POST',
@@ -372,11 +573,7 @@ async function setRepo() {
       body: JSON.stringify({ path })
     });
     const json = await res.json();
-    if (!res.ok) {
-      setRepoError(json.error || 'Invalid repo path');
-      return;
-    }
-    // success — repo is set, now trigger refresh
+    if (!res.ok) { setRepoError(json.error || 'Invalid repo path'); return; }
     currentRepo = path;
     document.getElementById('repo-display').textContent = path;
     cancelEdit();
@@ -385,18 +582,15 @@ async function setRepo() {
     setRepoError('Request failed: ' + e.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Set & Refresh';
-    // Fix innerHTML after textContent
     btn.innerHTML = 'Set &amp; Refresh';
   }
 }
 
-// --- Refresh ---
 async function triggerRefresh() {
   const btn = document.getElementById('refresh-btn');
   btn.disabled = true;
   btn.classList.add('spinning');
-  btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refreshing…`;
+  btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Counting…`;
   try {
     const res = await fetch('/api/refresh', { method: 'POST' });
     const json = await res.json();
@@ -404,7 +598,7 @@ async function triggerRefresh() {
     currentData = json.data;
     currentRepo = json.repo_path;
     document.getElementById('repo-display').textContent = currentRepo;
-    document.getElementById('dash-title').textContent = json.repo_name + ' — LOC Dashboard';
+    document.getElementById('dash-title').textContent = json.repo_name.toUpperCase() + ' — LOC';
     renderAll(currentData);
     document.getElementById('last-updated').textContent = 'Updated ' + json.updated_at;
   } catch(e) {
@@ -412,11 +606,10 @@ async function triggerRefresh() {
   } finally {
     btn.disabled = false;
     btn.classList.remove('spinning');
-    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh Data`;
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh`;
   }
 }
 
-// --- KPIs ---
 function updateKPIs(data) {
   if (!data.length) return;
   const last = data[data.length-1], first = data[0];
@@ -425,16 +618,21 @@ function updateKPIs(data) {
   document.getElementById('kpi-loc').textContent = fmt(last.lines);
   document.getElementById('kpi-loc-sub').textContent = 'as of ' + fmtDate(last.date);
   document.getElementById('kpi-growth').textContent = '+' + fmtFull(growth);
-  document.getElementById('kpi-growth-sub').textContent = `from ${first.lines} lines at launch`;
+  document.getElementById('kpi-growth-sub').textContent = 'from ' + fmtFull(first.lines) + ' at launch';
   document.getElementById('kpi-files').textContent = fmtFull(last.files);
-  document.getElementById('kpi-files-sub').textContent = `up from ${first.files} files`;
+  document.getElementById('kpi-files-sub').textContent = 'up from ' + first.files + ' files';
   document.getElementById('kpi-avg').textContent = '~' + fmt(avg);
-  document.getElementById('kpi-avg-sub').textContent = `across ${data.length} weekly snapshots`;
+  document.getElementById('kpi-avg-sub').textContent = 'across ' + data.length + ' weekly snapshots';
 }
 
-// --- Charts ---
 function mkTooltip() {
-  return { backgroundColor:'#12121c', borderColor:'#2a2a3d', borderWidth:1, titleColor:'#e2e8f0', bodyColor:'#94a3b8' };
+  return {
+    backgroundColor: '#1C1C1B', borderColor: '#303030', borderWidth: 1,
+    titleColor: '#EEEEEE', bodyColor: '#8A8A88',
+    titleFont: {family:'JetBrains Mono, monospace', size:11},
+    bodyFont: {family:'JetBrains Mono, monospace', size:11},
+    padding: 10, cornerRadius: 0,
+  };
 }
 
 function buildDelta(data) { return data.map((d,i)=>i===0?0:Math.max(0,d.lines-data[i-1].lines)); }
@@ -451,7 +649,7 @@ function quarterOf(date) {
 function getQuarterBreakdown(data) {
   const qmap = {};
   data.forEach((d,i)=>{ const q=quarterOf(d.date); const added=Math.max(0,d.lines-(i===0?0:data[i-1].lines)); qmap[q]=(qmap[q]||0)+added; });
-  return ['Q3','Q4','Q1','Q2'].filter(q=>qmap[q]).map(q=>({q,v:qmap[q]}));
+  return ['Q1','Q2','Q3','Q4'].filter(q=>qmap[q]).map(q=>({q,v:qmap[q]}));
 }
 
 function initCharts(data) {
@@ -459,47 +657,55 @@ function initCharts(data) {
   charts = {};
   const labels=data.map(d=>fmtDate(d.date)), lines=data.map(d=>d.lines), files=data.map(d=>d.files);
   const delta=buildDelta(data), density=buildDensity(data);
-  const qColors=['rgba(167,139,250,.75)','rgba(96,165,250,.75)','rgba(52,211,153,.75)','rgba(251,146,60,.75)'];
+  const monoFont = {family:'JetBrains Mono, monospace', size:10};
+  const qColors=[COBALT, KELLY, PINK, LIME];
 
   charts.trend = new Chart(document.getElementById('trendChart'), {
     type:'line',
     data:{labels,datasets:[
-      {label:'Lines of Code',data:lines,borderColor:PURPLE,backgroundColor:'rgba(167,139,250,.1)',borderWidth:2.5,fill:true,tension:.35,pointRadius:3,pointHoverRadius:6,pointBackgroundColor:PURPLE,yAxisID:'y'},
-      {label:'File Count',data:files,borderColor:GREEN,backgroundColor:'transparent',borderWidth:2,borderDash:[5,3],fill:false,tension:.35,pointRadius:2,pointHoverRadius:5,pointBackgroundColor:GREEN,yAxisID:'y2'}
+      {label:'Lines of Code',data:lines,borderColor:COBALT,backgroundColor:'rgba(31,71,230,0.08)',borderWidth:2,fill:true,tension:.3,pointRadius:2,pointHoverRadius:5,pointBackgroundColor:COBALT,yAxisID:'y'},
+      {label:'File Count',data:files,borderColor:KELLY,backgroundColor:'transparent',borderWidth:1.5,borderDash:[4,3],fill:false,tension:.3,pointRadius:1,pointHoverRadius:4,pointBackgroundColor:KELLY,yAxisID:'y2'}
     ]},
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-      plugins:{legend:{labels:{color:'#94a3b8',font:{size:12},usePointStyle:true}},tooltip:{...mkTooltip(),callbacks:{label:ctx=>ctx.datasetIndex===0?`  LOC: ${fmtFull(ctx.raw)}`:`  Files: ${ctx.raw}`}}},
+      plugins:{
+        legend:{labels:{color:TICK,font:monoFont,usePointStyle:true,pointStyleWidth:8}},
+        tooltip:{...mkTooltip(),callbacks:{label:ctx=>ctx.datasetIndex===0?`  LOC: ${fmtFull(ctx.raw)}`:`  Files: ${ctx.raw}`}}
+      },
       scales:{
-        x:{ticks:{color:TICK,font:{size:10},maxRotation:45},grid:{color:GRID}},
-        y:{position:'left',ticks:{color:PURPLE,font:{size:11},callback:v=>v>=1000?(v/1000).toFixed(0)+'k':v},grid:{color:GRID},title:{display:true,text:'Lines of Code',color:PURPLE,font:{size:11}}},
-        y2:{position:'right',ticks:{color:GREEN,font:{size:11}},grid:{drawOnChartArea:false},title:{display:true,text:'Files',color:GREEN,font:{size:11}}}
+        x:{ticks:{color:TICK,font:monoFont,maxRotation:45},grid:{color:GRID}},
+        y:{position:'left',ticks:{color:COBALT,font:monoFont,callback:v=>v>=1000?(v/1000).toFixed(0)+'k':v},grid:{color:GRID},title:{display:true,text:'LOC',color:COBALT,font:monoFont}},
+        y2:{position:'right',ticks:{color:KELLY,font:monoFont},grid:{drawOnChartArea:false},title:{display:true,text:'Files',color:KELLY,font:monoFont}}
       }}
   });
 
   const qb=getQuarterBreakdown(data);
   charts.donut = new Chart(document.getElementById('donutChart'), {
     type:'doughnut',
-    data:{labels:qb.map(x=>x.q),datasets:[{data:qb.map(x=>x.v),backgroundColor:qb.map((_,i)=>qColors[i%4]),borderColor:'#1a1a26',borderWidth:3}]},
-    options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
-      plugins:{legend:{position:'bottom',labels:{color:'#94a3b8',font:{size:12},usePointStyle:true,padding:12}},
-        tooltip:{...mkTooltip(),callbacks:{label:ctx=>{const t=ctx.dataset.data.reduce((a,b)=>a+b,0);return `  ${fmtFull(ctx.raw)} lines (${((ctx.raw/t)*100).toFixed(0)}%)`;}}}}
+    data:{labels:qb.map(x=>x.q),datasets:[{data:qb.map(x=>x.v),backgroundColor:qb.map((_,i)=>qColors[i%4]),borderColor:'#E4E4E3',borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'58%',
+      plugins:{
+        legend:{position:'bottom',labels:{color:TICK,font:monoFont,usePointStyle:true,padding:14}},
+        tooltip:{...mkTooltip(),callbacks:{label:ctx=>{const t=ctx.dataset.data.reduce((a,b)=>a+b,0);return `  ${fmtFull(ctx.raw)} (${((ctx.raw/t)*100).toFixed(0)}%)`;}}}}
     }
   });
 
   charts.delta = new Chart(document.getElementById('deltaChart'), {
     type:'bar',
-    data:{labels,datasets:[{label:'Lines Added',data:delta,backgroundColor:delta.map(v=>v>3000?'rgba(251,146,60,.7)':'rgba(167,139,250,.65)'),borderColor:delta.map(v=>v>3000?ORANGE:PURPLE),borderWidth:1,borderRadius:3}]},
+    data:{labels,datasets:[{label:'Lines Added',data:delta,
+      backgroundColor:delta.map(v=>v>3000?'rgba(255,79,168,0.7)':'rgba(31,71,230,0.55)'),
+      borderColor:delta.map(v=>v>3000?PINK:COBALT),
+      borderWidth:1,borderRadius:0}]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:{...mkTooltip(),callbacks:{label:ctx=>`  +${fmtFull(ctx.raw)} lines`}}},
-      scales:{x:{ticks:{color:TICK,font:{size:10},maxRotation:45},grid:{color:GRID}},y:{ticks:{color:TICK,font:{size:11},callback:v=>v>=1000?(v/1000).toFixed(0)+'k':v},grid:{color:GRID}}}}
+      scales:{x:{ticks:{color:TICK,font:monoFont,maxRotation:45},grid:{color:GRID}},y:{ticks:{color:TICK,font:monoFont,callback:v=>v>=1000?(v/1000).toFixed(0)+'k':v},grid:{color:GRID}}}}
   });
 
   charts.density = new Chart(document.getElementById('densityChart'), {
     type:'line',
-    data:{labels,datasets:[{label:'LOC/File',data:density,borderColor:BLUE,backgroundColor:'rgba(96,165,250,.1)',borderWidth:2.5,fill:true,tension:.35,pointRadius:3,pointHoverRadius:6,pointBackgroundColor:BLUE}]},
+    data:{labels,datasets:[{label:'LOC/File',data:density,borderColor:INK,backgroundColor:'rgba(12,12,12,0.06)',borderWidth:2,fill:true,tension:.3,pointRadius:2,pointHoverRadius:5,pointBackgroundColor:INK}]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:{...mkTooltip(),callbacks:{label:ctx=>`  ${ctx.raw} lines/file`}}},
-      scales:{x:{ticks:{color:TICK,font:{size:10},maxRotation:45},grid:{color:GRID}},y:{ticks:{color:TICK,font:{size:11}},grid:{color:GRID},title:{display:true,text:'Lines per File',color:TICK,font:{size:11}}}}}
+      scales:{x:{ticks:{color:TICK,font:monoFont,maxRotation:45},grid:{color:GRID}},y:{ticks:{color:TICK,font:monoFont},grid:{color:GRID},title:{display:true,text:'Lines / File',color:TICK,font:monoFont}}}}
   });
 }
 
@@ -510,7 +716,14 @@ function updateTable(data) {
     const dh=delta>0?`<span class="pos">+${fmtFull(delta)}</span>`:delta<0?`<span class="neg">${fmtFull(delta)}</span>`:'—';
     const pct=((d.lines/max)*100).toFixed(1);
     const den=d.files>0?(d.lines/d.files).toFixed(1):'—';
-    return `<tr><td>${fmtDate(d.date)}</td><td class="tr">${fmtFull(d.lines)}</td><td class="tr">${d.files}</td><td class="tr">${den}</td><td class="tr">${dh}</td><td><div class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width:${pct}%"></div></div><span style="font-size:11px;color:#64748b">${pct}%</span></div></td></tr>`;
+    return `<tr>
+      <td>${fmtDate(d.date)}</td>
+      <td class="tr">${fmtFull(d.lines)}</td>
+      <td class="tr">${d.files}</td>
+      <td class="tr">${den}</td>
+      <td class="tr">${dh}</td>
+      <td><div class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width:${pct}%"></div></div><span class="pct-label">${pct}%</span></div></td>
+    </tr>`;
   }).join('');
 }
 
@@ -521,11 +734,11 @@ function renderAll(data) {
   updateTable(filtered);
 }
 
-// Boot
 renderAll(currentData);
 const updatedAt = '__UPDATED_AT__';
 if (updatedAt) document.getElementById('last-updated').textContent = 'Updated ' + updatedAt;
-document.getElementById('dash-title').textContent = '__REPO_NAME__ — LOC Dashboard';
+const repoName = '__REPO_NAME__';
+if (repoName) document.getElementById('dash-title').textContent = repoName.toUpperCase() + ' — LOC';
 </script>
 </body>
 </html>
